@@ -59,8 +59,11 @@ if [ "$CURRENT_BRANCH" != "main" ]; then
   fi
 fi
 
-# Get the latest tag
-LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+# Get the latest semantic version tag (not floating tags like v1, v2)
+LATEST_TAG=$(git tag -l 'v*.*.*' --sort=-v:refname | head -n 1)
+if [ -z "$LATEST_TAG" ]; then
+  LATEST_TAG="v0.0.0"
+fi
 print_info "Latest tag: $LATEST_TAG"
 
 # Parse version numbers
