@@ -1,5 +1,5 @@
-name: "Build and Deploy to Firebase"
-description: "Builds the application and deploys to Firebase Hosting preview channel"
+name: "Build and Deploy to Firebase Preview Channel"
+description: "Builds the application and deploys to Firebase Hosting preview channel for PR testing"
 author: "Chris Brewer"
 inputs:
   build-command:

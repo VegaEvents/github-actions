@@ -35,14 +35,14 @@ Sets up Node.js environment with Yarn and installs dependencies.
 
 ---
 
-### 2. `build-and-deploy-firebase`
+### 2. `build-and-deploy-firebase-preview`
 
-Builds the application and deploys to Firebase Hosting preview channel.
+Builds the application and deploys to Firebase Hosting preview channel for PR testing.
 
 **Usage:**
 
 ```yaml
-- uses: VegaEvents/github-actions/build-and-deploy-firebase@v1
+- uses: VegaEvents/github-actions/build-and-deploy-firebase-preview@v1
   id: deploy
   with:
     build-command: "yarn build-dev"
@@ -183,7 +183,7 @@ jobs:
           npm config set "@bryntum:registry=https://npm-us.bryntum.com"
           npm config set "//npm-us.bryntum.com/:_authToken=${{ secrets.BRYNTUM_AUTH_TOKEN }}"
 
-      - uses: VegaEvents/github-actions/build-and-deploy-firebase@v1
+      - uses: VegaEvents/github-actions/build-and-deploy-firebase-preview@v1
         id: deploy
         with:
           build-command: yarn build-dev
