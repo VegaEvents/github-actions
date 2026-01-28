@@ -241,13 +241,22 @@ git add .
 git commit -m "fix: improve error handling in build action"
 git push
 
-# Tag new patch version
+# Use the release script (recommended)
+./release.sh patch
+
+# Or manually tag
 git tag v1.0.1
 git push origin v1.0.1
-
-# Update major version pointer (so @v1 users get the fix)
 git tag -fa v1 -m "Update v1 to v1.0.1"
 git push origin v1 --force
+```
+
+**Release script usage:**
+```bash
+./release.sh patch    # Bug fixes (1.0.1 → 1.0.2)
+./release.sh minor    # New features (1.0.2 → 1.1.0)
+./release.sh major    # Breaking changes (1.1.0 → 2.0.0)
+./release.sh v1.2.3   # Specific version
 ```
 
 ---
