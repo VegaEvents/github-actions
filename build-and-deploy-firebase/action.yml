@@ -70,7 +70,17 @@ runs:
 
     - name: Setup Firebase Service Account
       run: |
-        echo "${{ inputs.firebase-service-account }}" > $RUNNER_TEMP/firebase-service-account.json
+        echo "Creating service account file at: $RUNNER_TEMP/firebase-service-account.json"
+        echo '${{ inputs.firebase-service-account }}' > $RUNNER_TEMP/firebase-service-account.json
+        
+        if [ ! -f "$RUNNER_TEMP/firebase-service-account.json" ]; then
+          echo "❌ Service account file was not created"
+          exit 1
+        fi
+        
+        FILE_SIZE=$(wc -c < "$RUNNER_TEMP/firebase-service-account.json")
+        echo "✅ Service account file created ($FILE_SIZE bytes)"
+        
         echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-service-account.json" >> $GITHUB_ENV
       shell: bash
 
