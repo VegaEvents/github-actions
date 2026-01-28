@@ -14,6 +14,10 @@ inputs:
     description: "Firebase hosting target"
     required: true
 
+  firebase-service-account:
+    description: "Firebase service account JSON (from secrets)"
+    required: true
+
   channel-id:
     description: "Firebase preview channel ID (e.g. pr-123)"
     required: true
