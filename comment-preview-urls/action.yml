@@ -1,0 +1,132 @@
+name: "Comment Preview URLs on PR"
+description: "Creates or updates a comment on the PR with preview deployment URLs"
+author: "Chris Brewer"
+
+inputs:
+  github-token:
+    description: "GitHub token for API access"
+    required: true
+
+  pr-number:
+    description: "Pull request number"
+    required: true
+
+  commit-sha:
+    description: "Commit SHA (will be truncated to 7 chars)"
+    required: true
+
+  dev-url:
+    description: "Dev environment preview URL"
+    required: false
+    default: ""
+
+  dev-status:
+    description: "Dev deployment status (success/failure/skipped)"
+    required: false
+    default: "pending"
+
+  staging-url:
+    description: "Staging environment preview URL"
+    required: false
+    default: ""
+
+  staging-status:
+    description: "Staging deployment status (success/failure/skipped)"
+    required: false
+    default: "pending"
+
+  prod-url:
+    description: "Production environment preview URL"
+    required: false
+    default: ""
+
+  prod-status:
+    description: "Production deployment status (success/failure/skipped)"
+    required: false
+    default: "pending"
+
+  version:
+    description: "Version string (optional)"
+    required: false
+    default: ""
+
+  version-bumped:
+    description: "Whether version was auto-bumped (true/false)"
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Comment on PR with Preview URLs
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const devUrl = '${{ inputs.dev-url }}';
+          const stagingUrl = '${{ inputs.staging-url }}';
+          const prodUrl = '${{ inputs.prod-url }}';
+          const prNumber = ${{ inputs.pr-number }};
+          const sha = '${{ inputs.commit-sha }}'.substring(0, 7);
+
+          const versionBumped = '${{ inputs.version-bumped }}';
+          const newVersion = '${{ inputs.version }}';
+
+          const devStatus = '${{ inputs.dev-status }}';
+          const stagingStatus = '${{ inputs.staging-status }}';
+          const prodStatus = '${{ inputs.prod-status }}';
+
+          const formatUrl = (url, status) => {
+            if (status === 'success' && url) return url;
+            if (status === 'failure') return '❌ Deploy failed';
+            if (status === 'skipped') return '⏭️ Skipped';
+            return '⏳ Pending...';
+          };
+
+          const versionInfo = newVersion
+            ? `**Version:** \`${newVersion}\`${versionBumped === 'true' ? ' *(auto-bumped)*' : ''}`
+            : '';
+
+          const body = `## 🚀 Preview Deployment Ready
+
+          | Environment | Status | Preview URL |
+          |-------------|--------|-------------|
+          | **Dev** | ${devStatus === 'success' ? '✅' : '❌'} | ${formatUrl(devUrl, devStatus)} |
+          | **Staging** | ${stagingStatus === 'success' ? '✅' : '❌'} | ${formatUrl(stagingUrl, stagingStatus)} |
+          | **Production** | ${prodStatus === 'success' ? '✅' : '❌'} | ${formatUrl(prodUrl, prodStatus)} |
+
+          ${versionInfo}
+          **Commit:** \`${sha}\`
+
+            ---
+            <sub>🔄 This comment will be updated on each push to this PR.</sub>`;
+
+            // Find existing comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber
+            });
+
+            const botComment = comments.data.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('🚀 Preview Deployment Ready')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+              console.log('Updated existing preview comment');
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: body
+              });
+              console.log('Created new preview comment');
+            }

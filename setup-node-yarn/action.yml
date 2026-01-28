@@ -1,0 +1,26 @@
+name: "Setup Node.js with Yarn"
+description: "Sets up Node.js, enables Corepack, and installs Yarn dependencies"
+author: "Chris Brewer"
+
+inputs:
+  node-version:
+    description: "Node.js version to use"
+    required: false
+    default: "24"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: "yarn"
+
+    - name: Enable Corepack
+      run: corepack enables
+      shell: bash
+
+    - name: Install dependencies
+      run: yarn install --immutable
+      shell: bash

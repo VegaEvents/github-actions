@@ -1,0 +1,105 @@
+name: "Build and Deploy to Firebase"
+description: "Builds the application and deploys to Firebase Hosting preview channel"
+author: "Chris Brewer"
+inputs:
+  build-command:
+    description: "build command to run (e.g., yarn build-dev)"
+    required: true
+
+  firebase-project:
+    description: "Firebase project ID"
+    required: true
+
+  firebase-target:
+    description: "Firebase hosting target"
+    required: true
+
+  channel-id:
+    description: "Firebase preview channel ID (e.g. pr-123)"
+    required: true
+
+  firebase-tools-version:
+    description: "Firebase tools version"
+    required: false
+    default: "15.1.0"
+
+outputs:
+  preview-url:
+    description: "URL of the deployed preview"
+    value: "${{ steps.deploy.outputs.url }}"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Clean build directory
+      run: |
+        if [ -d "dist" ]; then
+          echo "Removing existing dist/ directory"
+          rm -rf dist
+        fi
+        echo "✅ Build directory is clean"
+      shell: bash
+
+    - name: Build application
+      id: build
+      run: |
+        echo "::group::Building with: ${{ inputs.build-command }}"
+        ${{ inputs.build-command }}
+        echo "::endgroup::"
+        echo "✅ Build command completed"
+      shell: bash
+
+    - name: Verify build output
+      run: |
+        if [ ! -d "dist" ]; then
+          echo "❌ Build completed but dist/ directory was not created"
+          exit 1
+        fi
+
+        if [ ! "$(ls -A dist)" ]; then
+          echo "❌ dist/ directory exists but is empty"
+          exit 1
+        fi
+
+        echo "✅ dist/ directory exists and contains files"
+      shell: bash
+
+    - name: Setup Firebase Service Account
+      run: |
+        echo "${{ inputs.firebase-service-account }}" > $RUNNER_TEMP/firebase-service-account.json
+        echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-service-account.json" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Deploy to Firebase Preview Channel
+      id: deploy
+      run: |
+        set +e
+        echo "Deploying to preview channel: ${{ inputs.channel-id }}"
+
+        RESULT=$(npx firebase-tools@${{ inputs.firebase-tools-version }} hosting:channel:deploy "${{ inputs.channel-id }}" \
+          --only ${{ inputs.firebase-target }} \
+          --project ${{ inputs.firebase-project }} \
+          --json 2>&1)
+        EXIT_CODE=$?
+
+        echo "Firebase output:"
+        echo "$RESULT"
+
+        if [ $EXIT_CODE -ne 0 ]; then
+          echo "❌ Firebase deploy failed with exit code $EXIT_CODE"
+          exit $EXIT_CODE
+        fi
+
+        URL=$(echo "$RESULT" | node -e "
+          const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
+          console.log(data.result?.['${{ inputs.firebase-target }}']?.url || '');
+        ")
+
+        echo "url=$URL" >> $GITHUB_OUTPUT
+        echo "✅ Preview deployed: $URL"
+      shell: bash
+
+    - name: Cleanup Service Account
+      if: always()
+      run: rm -f $RUNNER_TEMP/firebase-service-account.json
+      shell: bash
