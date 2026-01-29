@@ -31,7 +31,7 @@ Sets up Node.js environment with Yarn and installs dependencies.
 - Sets up Node.js with the specified version
 - Enables Corepack for Yarn
 - Installs dependencies with `yarn install --immutable`
-- Caches node_modules based on yarn.lock
+- Optimized for self-hosted runners (no remote caching overhead)
 
 ---
 
