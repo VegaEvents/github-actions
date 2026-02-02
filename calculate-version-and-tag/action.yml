@@ -77,12 +77,43 @@ runs:
         # Case 2: Tag exists remotely and points to same commit as HEAD
         if [ "$SHORT_CIRCUIT" = false ]; then
           echo "Checking if tag already exists remotely..."
+          
+          # Disable exit-on-error for git ls-remote commands
+          set +e
+          
           # Prefer ^{} to get commit hash for annotated tags; fallback for lightweight tags
-          REMOTE_TAG_HASH=$(git ls-remote --tags origin "refs/tags/${TAG_NAME}^{}" 2>/dev/null | awk '{print $1}')
-          [ -z "$REMOTE_TAG_HASH" ] && REMOTE_TAG_HASH=$(git ls-remote --tags origin | grep "refs/tags/$TAG_NAME$" | head -1 | awk '{print $1}')
-          HEAD_HASH=$(git rev-parse HEAD)
+          REMOTE_TAG_HASH=$(git ls-remote --tags origin "refs/tags/${TAG_NAME}^{}" 2>&1 | awk '{print $1}')
+          LS_REMOTE_EXIT=$?
+          
+          if [ $LS_REMOTE_EXIT -ne 0 ]; then
+            echo "⚠️ First git ls-remote failed with exit code $LS_REMOTE_EXIT"
+            echo "Output: $REMOTE_TAG_HASH"
+          fi
+          
+          if [ -z "$REMOTE_TAG_HASH" ]; then
+            REMOTE_TAG_HASH=$(git ls-remote --tags origin 2>&1 | grep "refs/tags/$TAG_NAME$" | head -1 | awk '{print $1}')
+            LS_REMOTE_EXIT2=$?
+            if [ $LS_REMOTE_EXIT2 -ne 0 ]; then
+              echo "⚠️ Second git ls-remote failed with exit code $LS_REMOTE_EXIT2"
+              echo "Output: $REMOTE_TAG_HASH"
+            fi
+          fi
+          
+          HEAD_HASH=$(git rev-parse HEAD 2>&1)
+          REV_PARSE_EXIT=$?
+          
+          # Re-enable exit-on-error
+          set -e
+          
+          if [ $REV_PARSE_EXIT -ne 0 ]; then
+            echo "❌ git rev-parse HEAD failed with exit code $REV_PARSE_EXIT"
+            echo "Output: $HEAD_HASH"
+            exit 1
+          fi
+          
           echo "Remote tag hash: ${REMOTE_TAG_HASH:-<not found>}"
           echo "HEAD hash: $HEAD_HASH"
+          
           if [ -n "$REMOTE_TAG_HASH" ] && [ "$REMOTE_TAG_HASH" = "$HEAD_HASH" ]; then
             echo "Tag $TAG_NAME already exists remotely and points to HEAD ($HEAD_HASH)"
             SHORT_CIRCUIT=true
