@@ -1,0 +1,178 @@
+name: 'Calculate Version and Create Tag'
+description: 'Calculates next semantic version from conventional commits and creates a git tag'
+author: 'Chris Brewer'
+
+inputs:
+  merge-commit-sha:
+    description: 'The merge commit SHA to tag (for PR merges)'
+    required: false
+    default: ''
+  ref:
+    description: 'The git ref to use if merge-commit-sha is not provided'
+    required: false
+    default: ''
+
+outputs:
+  version:
+    description: 'The calculated semantic version (without v prefix)'
+    value: ${{ steps.calculate.outputs.version }}
+  tag_name:
+    description: 'The git tag name (with v prefix)'
+    value: ${{ steps.calculate.outputs.tag_name }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v6
+      with:
+        ref: ${{ inputs.merge-commit-sha || inputs.ref }}
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: 24
+
+    - name: Calculate version and create tag
+      id: calculate
+      shell: bash
+      run: |
+        # Source the version calculation script
+        source "${{ github.action_path }}/calculate-version.sh"
+
+        # Configure git
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+        # Fetch all tags
+        echo "Fetching all tags..."
+        git fetch --tags
+
+        # Get latest tag and calculate initial version
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        NEXT_VERSION=$(calculate_version "$LATEST_TAG")
+        TAG_NAME="v$NEXT_VERSION"
+
+        echo "Calculated next version: $NEXT_VERSION"
+        echo "Tag name: $TAG_NAME"
+
+        # Short-circuit: no new commits / tag already exists and points to HEAD
+        SHORT_CIRCUIT=false
+
+        # Case 1: TAG_NAME equals LATEST_TAG (calculate_version returned no bump)
+        if [ "$TAG_NAME" = "$LATEST_TAG" ]; then
+          echo "No version bump - TAG_NAME ($TAG_NAME) equals LATEST_TAG ($LATEST_TAG)"
+          SHORT_CIRCUIT=true
+        fi
+
+        # Case 2: Tag exists remotely and points to same commit as HEAD
+        if [ "$SHORT_CIRCUIT" = false ]; then
+          # Prefer ^{} to get commit hash for annotated tags; fallback for lightweight tags
+          REMOTE_TAG_HASH=$(git ls-remote --tags origin "refs/tags/${TAG_NAME}^{}" 2>/dev/null | awk '{print $1}')
+          [ -z "$REMOTE_TAG_HASH" ] && REMOTE_TAG_HASH=$(git ls-remote --tags origin | grep "refs/tags/$TAG_NAME$" | head -1 | awk '{print $1}')
+          HEAD_HASH=$(git rev-parse HEAD)
+          if [ -n "$REMOTE_TAG_HASH" ] && [ "$REMOTE_TAG_HASH" = "$HEAD_HASH" ]; then
+            echo "Tag $TAG_NAME already exists remotely and points to HEAD ($HEAD_HASH)"
+            SHORT_CIRCUIT=true
+          fi
+        fi
+
+        if [ "$SHORT_CIRCUIT" = true ]; then
+          TAG_CREATED=true
+          echo ""
+          echo "=== Final Version (no new tag needed) ==="
+          echo "Version: $NEXT_VERSION"
+          echo "Tag: $TAG_NAME"
+          echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+        else
+          # Retry loop for tag creation with conflict detection
+          MAX_RETRIES=3
+          RETRY=0
+          TAG_CREATED=false
+
+          while [ $RETRY -lt $MAX_RETRIES ]; do
+            echo ""
+            echo "=== Attempt $((RETRY + 1)) of $MAX_RETRIES ==="
+            
+            # Re-fetch tags to detect any new tags created by concurrent jobs
+            echo "Re-fetching tags to detect conflicts..."
+            git fetch --tags --force
+
+            # Check if our calculated tag already exists remotely
+            if git ls-remote --tags origin | grep -q "refs/tags/$TAG_NAME$"; then
+              echo "❌ Tag $TAG_NAME already exists remotely (created by another job)"
+              echo "Recalculating version..."
+              
+              # Recalculate with the new latest tag
+              LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+              NEXT_VERSION=$(calculate_version "$LATEST_TAG")
+              TAG_NAME="v$NEXT_VERSION"
+              
+              echo "New calculated version: $NEXT_VERSION"
+              echo "New tag name: $TAG_NAME"
+              
+              RETRY=$((RETRY + 1))
+              sleep 2  # Brief delay before retry
+              continue
+            fi
+
+            # Re-fetch and recalculate immediately before tag creation to minimize race window
+            echo "Re-fetching tags immediately before tag creation..."
+            git fetch --tags --force
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            NEXT_VERSION=$(calculate_version "$LATEST_TAG")
+            TAG_NAME="v$NEXT_VERSION"
+            echo "Pre-create version: $NEXT_VERSION, tag: $TAG_NAME"
+
+            # Re-check if tag now exists (created by another job in the meantime)
+            if git ls-remote --tags origin | grep -q "refs/tags/$TAG_NAME$"; then
+              echo "❌ Tag $TAG_NAME now exists remotely after re-fetch, retrying..."
+              RETRY=$((RETRY + 1))
+              sleep 2
+              continue
+            fi
+
+            # Tag doesn't exist, try to create it
+            echo "Creating tag $TAG_NAME at $(git rev-parse HEAD)..."
+            
+            # Create local tag
+            if git tag "$TAG_NAME" 2>/dev/null; then
+              # Try to push tag atomically
+              if git push origin "$TAG_NAME" 2>&1; then
+                echo "✅ Successfully created and pushed tag $TAG_NAME"
+                TAG_CREATED=true
+                break
+              else
+                # Push failed, likely due to race condition
+                echo "⚠️ Tag push failed, another job may have created it"
+                git tag -d "$TAG_NAME" 2>/dev/null || true
+                
+                RETRY=$((RETRY + 1))
+                sleep 2
+                continue
+              fi
+            else
+              echo "⚠️ Local tag creation failed"
+              RETRY=$((RETRY + 1))
+              sleep 2
+              continue
+            fi
+          done
+
+          if [ "$TAG_CREATED" = false ]; then
+            echo ""
+            echo "❌ Failed to create unique tag after $MAX_RETRIES attempts"
+            echo "This likely means multiple deployments are racing."
+            echo "The concurrency lock should prevent this - please check workflow configuration."
+            exit 1
+          fi
+
+          echo ""
+          echo "=== Final Version ==="
+          echo "Version: $NEXT_VERSION"
+          echo "Tag: $TAG_NAME"
+          echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+        fi
