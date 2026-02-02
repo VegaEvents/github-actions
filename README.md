@@ -16,6 +16,7 @@ Calculates the next semantic version from conventional commits and creates a git
   with:
     merge-commit-sha: ${{ github.event.pull_request.merge_commit_sha }}
     ref: ${{ github.ref }}
+    github-token: ${{ secrets.GITHUB_TOKEN }}
 
 - run: echo "Version ${{ steps.version.outputs.version }}"
 - run: echo "Tag ${{ steps.version.outputs.tag_name }}"
@@ -26,6 +27,7 @@ Calculates the next semantic version from conventional commits and creates a git
 |-------|----------|---------|-------------|
 | `merge-commit-sha` | No | `''` | The merge commit SHA to tag (for PR merges) |
 | `ref` | No | `''` | The git ref to use if merge-commit-sha is not provided |
+| `github-token` | Yes | - | GitHub token for pushing tags (use `${{ secrets.GITHUB_TOKEN }}`) |
 
 **Outputs:**
 | Output | Description |
@@ -82,6 +84,7 @@ jobs:
         with:
           merge-commit-sha: ${{ github.event.pull_request.merge_commit_sha }}
           ref: ${{ github.ref }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   deploy-prod:
     needs: [ci, calculate-version]
