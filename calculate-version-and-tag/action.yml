@@ -11,6 +11,9 @@ inputs:
     description: 'The git ref to use if merge-commit-sha is not provided'
     required: false
     default: ''
+  github-token:
+    description: 'GitHub token for pushing tags'
+    required: true
 
 outputs:
   version:
@@ -28,6 +31,8 @@ runs:
       with:
         ref: ${{ inputs.merge-commit-sha || inputs.ref }}
         fetch-depth: 0
+        persist-credentials: true
+        token: ${{ inputs.github-token }}
 
     - name: Setup Node.js
       uses: actions/setup-node@v6
@@ -137,16 +142,30 @@ runs:
             # Tag doesn't exist, try to create it
             echo "Creating tag $TAG_NAME at $(git rev-parse HEAD)..."
             
-            # Create local tag
-            if git tag "$TAG_NAME" 2>/dev/null; then
+            # Create local tag (disable exit-on-error for explicit checking)
+            set +e
+            TAG_OUTPUT=$(git tag "$TAG_NAME" 2>&1)
+            TAG_EXIT=$?
+            set -e
+            
+            if [ $TAG_EXIT -eq 0 ]; then
+              echo "Local tag created successfully"
+              
               # Try to push tag atomically
-              if git push origin "$TAG_NAME" 2>&1; then
+              echo "Pushing tag to remote..."
+              set +e
+              PUSH_OUTPUT=$(git push origin "$TAG_NAME" 2>&1)
+              PUSH_EXIT=$?
+              set -e
+              
+              if [ $PUSH_EXIT -eq 0 ]; then
                 echo "✅ Successfully created and pushed tag $TAG_NAME"
                 TAG_CREATED=true
                 break
               else
                 # Push failed, likely due to race condition
-                echo "⚠️ Tag push failed, another job may have created it"
+                echo "⚠️ Tag push failed with exit code $PUSH_EXIT"
+                echo "Push output: $PUSH_OUTPUT"
                 git tag -d "$TAG_NAME" 2>/dev/null || true
                 
                 RETRY=$((RETRY + 1))
@@ -154,7 +173,8 @@ runs:
                 continue
               fi
             else
-              echo "⚠️ Local tag creation failed"
+              echo "⚠️ Local tag creation failed with exit code $TAG_EXIT"
+              echo "Tag output: $TAG_OUTPUT"
               RETRY=$((RETRY + 1))
               sleep 2
               continue
