@@ -16,10 +16,7 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
 
+    # Corepack (bundled with Node 16+) manages Yarn; enable it to use Yarn 4.x from packageManager in package.json
     - name: Enable Corepack
       run: corepack enable
-      shell: bash
-
-    - name: Install dependencies
-      run: yarn install --immutable
       shell: bash

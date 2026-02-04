@@ -25,7 +25,7 @@ inputs:
   firebase-tools-version:
     description: "Firebase tools version"
     required: false
-    default: "15.1.0"
+    default: "15.5.1"
 
 outputs:
   preview-url:
@@ -72,15 +72,15 @@ runs:
       run: |
         echo "Creating service account file at: $RUNNER_TEMP/firebase-service-account.json"
         echo '${{ inputs.firebase-service-account }}' > $RUNNER_TEMP/firebase-service-account.json
-        
+
         if [ ! -f "$RUNNER_TEMP/firebase-service-account.json" ]; then
           echo "❌ Service account file was not created"
           exit 1
         fi
-        
+
         FILE_SIZE=$(wc -c < "$RUNNER_TEMP/firebase-service-account.json")
         echo "✅ Service account file created ($FILE_SIZE bytes)"
-        
+
         echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-service-account.json" >> $GITHUB_ENV
       shell: bash
 

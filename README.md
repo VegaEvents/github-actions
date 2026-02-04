@@ -53,6 +53,7 @@ Calculates the next semantic version from conventional commits and creates a git
 **Race Condition Handling:**
 
 This action is designed to work safely in concurrent workflows:
+
 - Re-fetches tags before each attempt to detect conflicts
 - Retries with recalculated version if another job created a tag
 - Uses atomic git operations to prevent duplicate tags
@@ -121,9 +122,7 @@ Sets up Node.js environment with Yarn and installs dependencies.
 **What it does:**
 
 - Sets up Node.js with the specified version
-- Enables Corepack for Yarn
-- Installs dependencies with `yarn install --immutable`
-- Optimized for self-hosted runners (no remote caching overhead)
+- Enables Corepack (so Yarn can be used via `corepack enable` / `yarn` in later steps)
 
 ---
 
@@ -154,12 +153,12 @@ Builds the application and deploys to Firebase Hosting preview channel for PR te
 | `firebase-target` | Yes | - | Firebase hosting target name |
 | `firebase-service-account` | Yes | - | Firebase service account JSON (from secrets) |
 | `channel-id` | Yes | - | Preview channel ID (e.g., `pr-123`) |
-| `firebase-tools-version` | No | `15.1.0` | Firebase CLI version |
+| `firebase-tools-version` | No | `15.5.1` | Firebase CLI version |
 
 **Outputs:**
 | Output | Description |
 |--------|-------------|
-| `preview-url` | URL of the deployed preview environment |
+| `preview-url` | URL of the deployed preview |
 
 **What it does:**
 
@@ -222,7 +221,7 @@ Creates or updates a PR comment with preview deployment URLs.
 
 ## 🚀 Complete Workflow Example
 
-Here's how all three actions work together in a PR preview workflow:
+Here's how these actions work together in a PR preview workflow:
 
 ```yaml
 name: Deploy PR Preview
@@ -344,6 +343,7 @@ git push origin v1 --force
 ```
 
 **Release script usage:**
+
 ```bash
 ./release.sh patch    # Bug fixes (1.0.1 → 1.0.2)
 ./release.sh minor    # New features (1.0.2 → 1.1.0)
@@ -353,46 +353,11 @@ git push origin v1 --force
 
 ---
 
-## 🔄 Migration Guide
-
-### Before (Duplicated Code)
-
-```yaml
-# Same ~50 lines repeated in each job
-- uses: actions/checkout@v6
-- uses: actions/setup-node@v4
-  with:
-    node-version: 24
-- run: corepack enable
-- run: yarn install --immutable
-- run: yarn build-dev
-- run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEV }}' > ...
-- run: npx firebase-tools@15.1.0 hosting:channel:deploy ...
-- run: rm -f $RUNNER_TEMP/firebase-service-account.json
-```
-
-### After (Consolidated)
-
-```yaml
-# 3 clean, reusable action calls
-- uses: actions/checkout@v6
-- uses: VegaEvents/github-actions/setup-node-yarn@v1
-- uses: VegaEvents/github-actions/build-and-deploy-firebase@v1
-  with:
-    build-command: yarn build-dev
-    firebase-project: fluttervega-f312c
-    firebase-target: admin-dev-vegaevents
-    firebase-service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEV }}
-    channel-id: pr-${{ github.event.pull_request.number }}
-```
-
----
-
 ## 🐛 Troubleshooting
 
 ### Build Failures
 
-The `build-and-deploy-firebase` action validates:
+The `build-and-deploy-firebase-preview` action validates:
 
 - ✅ Build command exits successfully
 - ✅ `dist/` directory is created
