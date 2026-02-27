@@ -5,7 +5,7 @@ Installs and authenticates the GitHub CLI (`gh`). Useful for self-hosted runners
 ## Usage
 
 ```yaml
-- uses: VegaEvents/github-actions/setup-gh@v1
+- uses: VegaEvents/github-actions/setup-gh@v2
   with:
     gh-token: ${{ secrets.GITHUB_TOKEN }}
 ```
