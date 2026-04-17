@@ -1,5 +1,5 @@
 name: "Build and Deploy to Firebase Preview Channel"
-description: "Builds the application and deploys to Firebase Hosting preview channel for PR testing"
+description: "Builds the application and deploys to Firebase Hosting preview channel for PR testing. Caller must authenticate to GCP first (e.g. via google-github-actions/auth)."
 author: "Chris Brewer"
 inputs:
   build-command:
@@ -12,10 +12,6 @@ inputs:
 
   firebase-target:
     description: "Firebase hosting target"
-    required: true
-
-  firebase-service-account:
-    description: "Firebase service account JSON (from secrets)"
     required: true
 
   channel-id:
@@ -68,22 +64,6 @@ runs:
         echo "✅ dist/ directory exists and contains files"
       shell: bash
 
-    - name: Setup Firebase Service Account
-      run: |
-        echo "Creating service account file at: $RUNNER_TEMP/firebase-service-account.json"
-        echo '${{ inputs.firebase-service-account }}' > $RUNNER_TEMP/firebase-service-account.json
-
-        if [ ! -f "$RUNNER_TEMP/firebase-service-account.json" ]; then
-          echo "❌ Service account file was not created"
-          exit 1
-        fi
-
-        FILE_SIZE=$(wc -c < "$RUNNER_TEMP/firebase-service-account.json")
-        echo "✅ Service account file created ($FILE_SIZE bytes)"
-
-        echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-service-account.json" >> $GITHUB_ENV
-      shell: bash
-
     - name: Deploy to Firebase Preview Channel
       id: deploy
       run: |
@@ -111,9 +91,4 @@ runs:
 
         echo "url=$URL" >> $GITHUB_OUTPUT
         echo "✅ Preview deployed: $URL"
-      shell: bash
-
-    - name: Cleanup Service Account
-      if: always()
-      run: rm -f $RUNNER_TEMP/firebase-service-account.json
       shell: bash

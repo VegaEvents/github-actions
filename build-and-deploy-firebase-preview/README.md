@@ -2,16 +2,28 @@
 
 Builds the application and deploys to Firebase Hosting preview channel for PR testing.
 
+The caller must authenticate to GCP before invoking this action — e.g. via `google-github-actions/auth@v2` using Workload Identity Federation. The action relies on `GOOGLE_APPLICATION_CREDENTIALS` (set by that step) for Firebase CLI auth.
+
 ## Usage
 
 ```yaml
-- uses: VegaEvents/github-actions/build-and-deploy-firebase-preview@v1
+permissions:
+  contents: read
+  id-token: write
+
+# ...
+
+- uses: google-github-actions/auth@v2
+  with:
+    workload_identity_provider: projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github/providers/<PROVIDER_ID>
+    service_account: <SA_EMAIL>
+
+- uses: VegaEvents/github-actions/build-and-deploy-firebase-preview@v3
   id: deploy
   with:
     build-command: "yarn build-dev"
     firebase-project: "fluttervega-f312c"
     firebase-target: "admin-dev-vegaevents"
-    firebase-service-account: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEV }}
     channel-id: "pr-${{ github.event.pull_request.number }}"
 
 - run: echo "Deployed to ${{ steps.deploy.outputs.preview-url }}"
@@ -24,7 +36,6 @@ Builds the application and deploys to Firebase Hosting preview channel for PR te
 | `build-command` | Yes | - | Build command to run (e.g., `yarn build-dev`) |
 | `firebase-project` | Yes | - | Firebase project ID |
 | `firebase-target` | Yes | - | Firebase hosting target name |
-| `firebase-service-account` | Yes | - | Firebase service account JSON (from secrets) |
 | `channel-id` | Yes | - | Preview channel ID (e.g., `pr-123`) |
 | `firebase-tools-version` | No | `15.5.1` | Firebase CLI version |
 
@@ -39,10 +50,12 @@ Builds the application and deploys to Firebase Hosting preview channel for PR te
 - Cleans any existing `dist/` directory
 - Runs the build command
 - Verifies build output exists and is non-empty
-- Sets up Firebase service account credentials
-- Deploys to Firebase Hosting preview channel
+- Deploys to Firebase Hosting preview channel using caller-provided ADC
 - Returns the preview URL
-- Cleans up credentials (always runs, even on failure)
+
+## Breaking changes in v3
+
+- Removed `firebase-service-account` input. Callers must authenticate via `google-github-actions/auth@v2` (or equivalent) before invoking this action. Migration: delete the input, add an `auth@v2` step with `workload_identity_provider` + `service_account`, and add `id-token: write` to the job's `permissions`.
 
 ## Troubleshooting
 
@@ -64,6 +77,6 @@ If the build fails, check:
 
 Common issues:
 
-- **Invalid service account**: Ensure secret contains valid JSON
+- **Missing credentials**: Ensure `google-github-actions/auth@v2` ran before this step and the job declares `id-token: write`
 - **Wrong target name**: Check Firebase hosting configuration
-- **Permissions**: Service account needs Firebase Hosting Admin role
+- **Permissions**: Service account needs Firebase Hosting Admin role on the target project
