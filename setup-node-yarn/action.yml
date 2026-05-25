@@ -4,17 +4,37 @@ author: "Chris Brewer"
 
 inputs:
   node-version:
-    description: "Node.js version to use"
+    description: |
+      Node.js version to use. Resolution order:
+        1. This input if explicitly set (e.g. `with: node-version: '24.15.0'`)
+        2. The NODE_VERSION env var if set by the caller workflow
+        3. Built-in default (currently 24.15.0 — Node 24.16.0+ ships libuv 1.52.1
+           which hangs streaming file writes on linuxkit/some Ubuntu kernels)
     required: false
-    default: "24"
+    default: ""   # Empty sentinel: "no explicit override, fall through to env/default"
 
 runs:
   using: "composite"
   steps:
+    - name: Resolve Node version
+      id: resolve
+      shell: bash
+      run: |
+        VERSION="${{ inputs.node-version }}"
+        if [ -z "$VERSION" ]; then
+          VERSION="${NODE_VERSION:-24.15.0}"
+        fi
+        VERSION="${VERSION//$'\r'/}"
+        VERSION="${VERSION//$'\n'/}"
+        VERSION="${VERSION#"${VERSION%%[![:space:]]*}"}"
+        VERSION="${VERSION%"${VERSION##*[![:space:]]}"}"
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "Using Node $VERSION"
+
     - name: Setup Node.js
       uses: actions/setup-node@v6
       with:
-        node-version: ${{ inputs.node-version }}
+        node-version: ${{ steps.resolve.outputs.version }}
 
     # Corepack (bundled with Node 16+) manages Yarn; enable it to use Yarn 4.x from packageManager in package.json
     - name: Enable Corepack
