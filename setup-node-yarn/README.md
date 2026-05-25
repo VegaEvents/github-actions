@@ -8,7 +8,7 @@ Sets up Node.js environment with Yarn and installs dependencies.
 - uses: actions/checkout@v6
 
 - uses: VegaEvents/github-actions/setup-node-yarn@v1
-  # Uses Node.js 24 by default
+  # Uses Node.js 24.15.0 by default
 
 - uses: VegaEvents/github-actions/setup-node-yarn@v1
   with:
@@ -19,7 +19,7 @@ Sets up Node.js environment with Yarn and installs dependencies.
 
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `node-version` | No | `24` | Node.js version to install |
+| `node-version` | No | `24.15.0` | Node.js version to install |
 
 ## What it does
 

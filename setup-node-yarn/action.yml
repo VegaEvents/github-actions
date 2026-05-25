@@ -24,6 +24,10 @@ runs:
         if [ -z "$VERSION" ]; then
           VERSION="${NODE_VERSION:-24.15.0}"
         fi
+        VERSION="${VERSION//$'\r'/}"
+        VERSION="${VERSION//$'\n'/}"
+        VERSION="${VERSION#"${VERSION%%[![:space:]]*}"}"
+        VERSION="${VERSION%"${VERSION##*[![:space:]]}"}"
         echo "version=$VERSION" >> "$GITHUB_OUTPUT"
         echo "Using Node $VERSION"
 
