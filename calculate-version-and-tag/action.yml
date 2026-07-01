@@ -1,5 +1,5 @@
 name: 'Calculate Version and Create Tag'
-description: 'Calculates next semantic version from conventional commits and creates a git tag'
+description: 'Calculates next semantic version from conventional commits and (unless dry-run) creates a git tag'
 author: 'Chris Brewer'
 
 inputs:
@@ -14,6 +14,10 @@ inputs:
   github-token:
     description: 'GitHub token for pushing tags'
     required: true
+  dry-run:
+    description: 'When true, calculate and output the version but do NOT create or push a git tag. Lets a caller compute the version early (e.g. to bake into a build) and create the tag in a later step.'
+    required: false
+    default: 'false'
 
 outputs:
   version:
@@ -61,7 +65,18 @@ runs:
 
         echo "Calculated next version: $NEXT_VERSION"
         echo "Tag name: $TAG_NAME"
-        
+
+        # Dry run: output the computed version but do not create/push any tag.
+        if [ "${{ inputs.dry-run }}" = "true" ]; then
+          echo ""
+          echo "=== Dry run: skipping tag creation ==="
+          echo "Version: $NEXT_VERSION"
+          echo "Tag: $TAG_NAME"
+          echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
         echo ""
         echo "=== Checking if tag creation is needed ==="
 
