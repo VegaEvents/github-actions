@@ -45,8 +45,8 @@ select_release_tag() {
 resolve_baseline_or_die() {
   local tag ec
   set +e; tag=$(select_release_tag); ec=$?; set -e
-  if [ "$ec" -eq 2 ]; then
-    echo "::error title=No valid release tag::This repo has v* tags but none match vX.Y.Z, so a version baseline cannot be determined. Inspect 'git tag -l' and remove or fix the offending tag(s) before retrying." >&2
+  if [ "$ec" -ne 0 ]; then
+    echo "::error title=No valid release tag::Could not determine a version baseline (select_release_tag exit $ec). If v* tags exist but none match vX.Y.Z, inspect 'git tag -l' and remove or fix the offending tag(s) before retrying." >&2
     exit 1
   fi
   echo "$tag"
