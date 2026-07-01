@@ -16,6 +16,14 @@ jobs:
   release:
     runs-on: [self-hosted, builder]
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Calculate version and create tag
         uses: ./calculate-version-and-tag
         id: version
