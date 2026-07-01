@@ -62,5 +62,23 @@ git -C "$d" tag v2.86.9; git -C "$d" tag v2.86.10
 out="$(run "$d")"; ec=$?
 check "version-sorts (v2.86.10 > v2.86.9)" "v2.86.10" "0" "$out" "$ec"
 
+# resolve_baseline_or_die: the wrapper action.yml uses at all 3 sites. It must
+# print the baseline on exit 0 for a healthy repo, and hard-exit 1 (not seed
+# v0.0.0) when select_release_tag refuses with exit 2. Command substitution runs
+# it in a subshell, so its `exit 1` is captured here rather than killing us.
+run_die() { local d="$1"; local out; out="$(cd "$d" && resolve_baseline_or_die 2>/dev/null)"; local ec=$?; echo "$out"; return $ec; }
+
+# 6. Healthy repo -> prints baseline, exit 0.
+d="$(new_repo)"
+git -C "$d" tag v1.2.3
+out="$(run_die "$d")"; ec=$?
+check "resolve_baseline_or_die prints baseline on healthy repo" "v1.2.3" "0" "$out" "$ec"
+
+# 7. Malformed-only tags -> hard exit 1, prints nothing (does NOT seed v0.0.0).
+d="$(new_repo)"
+git -C "$d" tag v2.86; git -C "$d" tag v2.86.6-rc1
+out="$(run_die "$d")"; ec=$?
+check "resolve_baseline_or_die exits 1 (no guess) on malformed tags" "" "1" "$out" "$ec"
+
 echo "---"
 if [ "$FAILS" -eq 0 ]; then echo "all passed"; else echo "$FAILS failed"; exit 1; fi

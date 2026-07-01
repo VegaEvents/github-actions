@@ -21,26 +21,24 @@ This repository uses semantic versioning with Git tags:
 - `@v1.0.0` - Specific version (use for maximum reproducibility)
 - `@main` - Bleeding edge (not recommended for production)
 
-### Automated releases
+### Releases are automatic
 
 Every merge to `main` triggers the [Release workflow](.github/workflows/release.yml), which:
 
-1. Calculates the next version from conventional commits since the last `vX.Y.Z` tag
+1. Calculates the next version from conventional commits since the last release tag matching `vX.Y.Z` (foreign lineages like `calendar-v*` are ignored)
 2. Creates and pushes the new semver tag (e.g., `v3.0.2`)
 3. Updates the floating major tag (e.g., `v3`) so consumers on `@v3` pick up the release
 
-Version bumps follow conventional commits: `BREAKING CHANGE` / `type!:` → major, `feat:` → minor, `fix:` / `perf:` → patch.
+There is no manual release step — **the version bump is decided entirely by your commit messages**, so conventional-commit hygiene *is* the release process:
 
-### Manual releases with `release.sh`
+| Commit prefix | Bump |
+|---|---|
+| `BREAKING CHANGE` / `type!:` | major |
+| `feat:` | minor |
+| `fix:` / `perf:` | patch |
+| anything else | patch |
 
-Use [`release.sh`](./release.sh) when you need a specific version or want annotated tags with custom release notes:
-
-```bash
-./release.sh patch    # Bug fixes (1.0.1 → 1.0.2)
-./release.sh minor    # New features (1.0.2 → 1.1.0)
-./release.sh major    # Breaking changes (1.1.0 → 2.0.0)
-./release.sh v1.2.3   # Specific version
-```
+Every merge cuts a release. To batch changes into one version, land them in a single squashed merge.
 
 ## Contributing
 

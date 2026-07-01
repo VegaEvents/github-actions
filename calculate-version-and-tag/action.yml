@@ -54,22 +54,20 @@ runs:
         echo "Fetching all tags..."
         git fetch --tags
 
-        # Get latest tag and calculate initial version.
         # Select the vX.Y.Z baseline explicitly instead of `git describe --tags`,
         # which is name-blind and once picked up calendar-v0.1.0 (a package
         # release), fed it to `npx semver`, and wedged every deploy. If a newer
         # non-release tag is sitting on top, warn LOUDLY (don't hide it) but keep
         # deploying on the correct baseline; only a genuinely un-guessable tag
-        # state stops the run.
-        NEWEST_ANY_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-        set +e
-        LATEST_TAG=$(select_release_tag)
-        SELECT_EXIT=$?
-        set -e
-        if [ "$SELECT_EXIT" -eq 2 ]; then
-          echo "::error title=No valid release tag::This repo has v* tags but none match vX.Y.Z, so a version baseline cannot be determined. Inspect 'git tag -l' and remove or fix the offending tag(s) before retrying."
-          exit 1
-        fi
+        # state stops the run (resolve_baseline_or_die enforces that).
+        #
+        # NEWEST_ANY_TAG is version-sorted — the SAME ordering select_release_tag
+        # uses — so the comparison below is apples-to-apples. Do NOT use
+        # `git describe --tags` here: it orders by commit ancestry from HEAD, so a
+        # foreign tag on an unmerged branch (the pollution case) is invisible to
+        # it, and it can differ from version order even when nothing is wrong.
+        NEWEST_ANY_TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+        LATEST_TAG=$(resolve_baseline_or_die)
         if [ -n "$NEWEST_ANY_TAG" ] && [ "$NEWEST_ANY_TAG" != "$LATEST_TAG" ]; then
           echo "::warning title=Non-release tag present::Newest tag in this repo is '$NEWEST_ANY_TAG', which is NOT an app release (vX.Y.Z). Using '$LATEST_TAG' as the version baseline. If you expected '$NEWEST_ANY_TAG' to drive the app version this is fine (e.g. a package lineage like calendar-v*); if not, a foreign tag is polluting this repo's tags — investigate before merging further."
         fi
@@ -167,7 +165,7 @@ runs:
               echo "Recalculating version..."
               
               # Recalculate with the new latest tag
-              LATEST_TAG=$(select_release_tag || echo "v0.0.0")
+              LATEST_TAG=$(resolve_baseline_or_die)
               NEXT_VERSION=$(calculate_version "$LATEST_TAG")
               TAG_NAME="v$NEXT_VERSION"
               
@@ -182,7 +180,7 @@ runs:
             # Re-fetch and recalculate immediately before tag creation to minimize race window
             echo "Re-fetching tags immediately before tag creation..."
             git fetch --tags --force
-            LATEST_TAG=$(select_release_tag || echo "v0.0.0")
+            LATEST_TAG=$(resolve_baseline_or_die)
             NEXT_VERSION=$(calculate_version "$LATEST_TAG")
             TAG_NAME="v$NEXT_VERSION"
             echo "Pre-create version: $NEXT_VERSION, tag: $TAG_NAME"

@@ -43,7 +43,15 @@ jobs:
             exit 0
           fi
 
-          TAG_SHA=$(git rev-parse "refs/tags/$TAG_NAME" 2>/dev/null || echo "")
+          # The action created/pushed the tag; make sure it's in this local repo
+          # (the action's short-circuit path may not have fetched it locally).
+          git fetch --tags --force
+
+          # ^{} dereferences to the commit for BOTH lightweight and annotated tags.
+          # Without it, an annotated tag resolves to the tag-object SHA, TAG_SHA
+          # would never equal HEAD_SHA, and the floating tag would silently stop
+          # updating if the action ever switches to annotated tags.
+          TAG_SHA=$(git rev-parse "refs/tags/$TAG_NAME^{}" 2>/dev/null || echo "")
           HEAD_SHA=$(git rev-parse HEAD)
 
           if [ "$TAG_SHA" != "$HEAD_SHA" ]; then

@@ -35,6 +35,23 @@ select_release_tag() {
   return 0
 }
 
+# Resolves the release baseline or dies loudly. Enforces select_release_tag's
+# exit-2 "refuse to guess" contract in ONE place so every caller behaves
+# identically — the retry loop used to `|| echo v0.0.0` here, silently seeding
+# v0.0.0 on a malformed-tag repo (the exact guess the guard exists to prevent).
+# Prints only the tag on stdout; safe to capture with $(...). On exit 2 it emits
+# the workflow error to stderr and exits — under `set -e` (Actions bash default)
+# a failed $(...) assignment propagates that exit to the parent (verified).
+resolve_baseline_or_die() {
+  local tag ec
+  set +e; tag=$(select_release_tag); ec=$?; set -e
+  if [ "$ec" -eq 2 ]; then
+    echo "::error title=No valid release tag::This repo has v* tags but none match vX.Y.Z, so a version baseline cannot be determined. Inspect 'git tag -l' and remove or fix the offending tag(s) before retrying." >&2
+    exit 1
+  fi
+  echo "$tag"
+}
+
 # Function to calculate version from commits (logs to stderr; only version to stdout)
 calculate_version() {
   local latest_tag=$1
@@ -77,5 +94,5 @@ calculate_version() {
   fi
 
   echo "Bump type: $bump" >&2
-  npx semver "$latest_version" -i "$bump"
+  npx -y semver@7.8.5 "$latest_version" -i "$bump"
 }
