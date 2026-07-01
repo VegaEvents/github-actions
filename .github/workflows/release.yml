@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: [self-hosted, builder]
+    steps:
+      - name: Calculate version and create tag
+        uses: ./calculate-version-and-tag
+        id: version
+        with:
+          ref: ${{ github.sha }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update floating major tag
+        shell: bash
+        env:
+          TAG_NAME: ${{ steps.version.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$TAG_NAME" ]; then
+            echo "No tag name output — skipping floating tag update"
+            exit 0
+          fi
+
+          TAG_SHA=$(git rev-parse "refs/tags/$TAG_NAME" 2>/dev/null || echo "")
+          HEAD_SHA=$(git rev-parse HEAD)
+
+          if [ "$TAG_SHA" != "$HEAD_SHA" ]; then
+            echo "Release tag $TAG_NAME is not at HEAD — skipping floating tag update"
+            exit 0
+          fi
+
+          MAJOR="${TAG_NAME#v}"
+          MAJOR="${MAJOR%%.*}"
+          MAJOR_TAG="v$MAJOR"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          echo "Updating floating tag $MAJOR_TAG -> $TAG_NAME"
+          git tag -fa "$MAJOR_TAG" -m "Update $MAJOR_TAG to $TAG_NAME"
+          git push origin "$MAJOR_TAG" --force
