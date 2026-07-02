@@ -23,6 +23,7 @@ Calculates the next semantic version from conventional commits and creates a git
 | `merge-commit-sha` | No | `''` | The merge commit SHA to tag (for PR merges) |
 | `ref` | No | `''` | The git ref to use if merge-commit-sha is not provided |
 | `github-token` | Yes | - | GitHub token for pushing tags (use `${{ secrets.GITHUB_TOKEN }}`) |
+| `dry-run` | No | `'false'` | When `true`, compute and output the version but do **not** create or push a git tag |
 
 ## Outputs
 
@@ -42,9 +43,35 @@ Calculates the next semantic version from conventional commits and creates a git
   - `fix:` or `perf:` → patch bump (e.g., 1.0.0 → 1.0.1)
   - Other commits → defaults to patch bump
 - Handles race conditions with retry logic (3 attempts)
-- Atomically creates and pushes the new git tag
+- Atomically creates and pushes the new git tag (skipped when `dry-run: true`)
 - Short-circuits if no version bump is needed or tag already exists
 - Returns both the version number and tag name for use in subsequent jobs
+
+## Dry run
+
+Set `dry-run: true` to compute the version **without** creating a tag. The action
+still returns `version` and `tag_name`, but performs no git write. This is useful
+when a caller needs the version *before* it has something worth tagging — e.g. to
+bake the version into a binary during build, then create the tag in a later step
+only after tests/deploy succeed:
+
+```yaml
+# 1) Compute the version early (no tag yet)
+- uses: VegaEvents/github-actions/calculate-version-and-tag@v1
+  id: version
+  with:
+    ref: ${{ github.ref }}
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+    dry-run: true
+
+# 2) ...build/test/deploy using ${{ steps.version.outputs.version }}...
+
+# 3) Create the tag for real once everything succeeds
+- uses: VegaEvents/github-actions/calculate-version-and-tag@v1
+  with:
+    ref: ${{ github.ref }}
+    github-token: ${{ secrets.GITHUB_TOKEN }}
+```
 
 ## Race Condition Handling
 
