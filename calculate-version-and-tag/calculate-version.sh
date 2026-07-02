@@ -42,6 +42,8 @@ select_release_tag() {
 # Prints only the tag on stdout; safe to capture with $(...). On exit 2 it emits
 # the workflow error to stderr and exits — under `set -e` (Actions bash default)
 # a failed $(...) assignment propagates that exit to the parent (verified).
+# Call sites still append `|| exit 1` so the guard survives a refactor into an
+# errexit-suppressed context (an `if !` condition, a `||` chain, or `local`).
 resolve_baseline_or_die() {
   local tag ec
   set +e; tag=$(select_release_tag); ec=$?; set -e
@@ -60,32 +62,37 @@ calculate_version() {
   echo "Latest tag: $latest_tag" >&2
   echo "Latest version: $latest_version" >&2
 
-  # Get commits since latest tag
-  local commits
+  # Get commits since latest tag. Type detection (feat/fix/perf/!) reads
+  # subjects only, so a body paragraph starting "feat: ..." can't inflate the
+  # bump; full bodies are scanned ONLY for BREAKING CHANGE, which per
+  # conventional commits is a footer and lives in the body.
+  local range subjects bodies
   if [ "$latest_tag" = "v0.0.0" ]; then
-    commits=$(git log --format="%B" HEAD)
+    range="HEAD"
   else
-    commits=$(git log "$latest_tag"..HEAD --format="%B")
+    range="$latest_tag..HEAD"
   fi
+  subjects=$(git log --format="%s" "$range")
+  bodies=$(git log --format="%B" "$range")
 
-  if [ -z "$commits" ]; then
+  if [ -z "$subjects" ]; then
     echo "No new commits since last tag" >&2
     echo "$latest_version"
     return 0
   fi
 
   echo "Commits since $latest_tag:" >&2
-  echo "$commits" >&2
+  echo "$subjects" >&2
 
   # Determine bump type from conventional commits
   local bump=""
-  if echo "$commits" | grep -qiE '(^BREAKING CHANGE|^[a-z]+(\([^)]+\))?!:)'; then
+  if echo "$bodies" | grep -qiE '^BREAKING CHANGE' || echo "$subjects" | grep -qiE '^[a-z]+(\([^)]+\))?!:'; then
     bump="major"
     echo "Found breaking change - major bump" >&2
-  elif echo "$commits" | grep -qiE '^feat(\([^)]+\))?:'; then
+  elif echo "$subjects" | grep -qiE '^feat(\([^)]+\))?:'; then
     bump="minor"
     echo "Found feat commit - minor bump" >&2
-  elif echo "$commits" | grep -qiE '^(fix|perf)(\([^)]+\))?:'; then
+  elif echo "$subjects" | grep -qiE '^(fix|perf)(\([^)]+\))?:'; then
     bump="patch"
     echo "Found fix/perf commit - patch bump" >&2
   else
