@@ -1,0 +1,7 @@
+# CODEOWNERS
+#
+# GitHub auto-requests review from these owners on every PR. The catch-all rule
+# below makes both teams owners of the entire repository.
+# Docs: https://docs.github.com/articles/about-code-owners
+
+* @VegaEvents/devs @VegaEvents/qa
