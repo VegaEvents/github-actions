@@ -58,8 +58,19 @@ runs:
         echo "Fetching all tags..."
         git fetch --tags
 
-        # Get latest tag and calculate initial version
-        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        # Select the vX.Y.Z baseline explicitly instead of `git describe --tags`,
+        # which is name-blind and once picked up calendar-v0.1.0 (a package
+        # release), fed it to `npx semver`, and wedged every deploy. Baseline
+        # selection ignores foreign tags (resolve_baseline_or_die enforces
+        # that); the warning below is the observable alarm. Our repos use
+        # strictly semver release tags, so ANY other tag — calendar-v*,
+        # prereleases, whatever — is pollution, and we deliberately warn on
+        # EVERY run until it is removed.
+        NON_RELEASE_TAGS=$(git tag -l | grep -vE '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
+        LATEST_TAG=$(resolve_baseline_or_die) || exit 1
+        if [ -n "$NON_RELEASE_TAGS" ]; then
+          echo "::warning title=Non-release tag present::Found tag(s) that are not vX.Y.Z app releases: $(echo "$NON_RELEASE_TAGS" | tr '\n' ' '). Using '$LATEST_TAG' as the version baseline. This repo should only contain semver release tags — a foreign tag is polluting it; investigate and remove it."
+        fi
         NEXT_VERSION=$(calculate_version "$LATEST_TAG")
         TAG_NAME="v$NEXT_VERSION"
 
@@ -165,13 +176,23 @@ runs:
               echo "Recalculating version..."
               
               # Recalculate with the new latest tag
-              LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+              LATEST_TAG=$(resolve_baseline_or_die) || exit 1
               NEXT_VERSION=$(calculate_version "$LATEST_TAG")
               TAG_NAME="v$NEXT_VERSION"
-              
+
+              # The concurrent job may have tagged a commit that already
+              # contains HEAD; then the recalc yields no bump and retrying
+              # would fail 3 times trying to re-create an existing tag.
+              if [ "$TAG_NAME" = "$LATEST_TAG" ]; then
+                echo "No version bump after recalculation - $TAG_NAME already covers HEAD"
+                echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+                echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+
               echo "New calculated version: $NEXT_VERSION"
               echo "New tag name: $TAG_NAME"
-              
+
               RETRY=$((RETRY + 1))
               sleep 2  # Brief delay before retry
               continue
@@ -180,10 +201,19 @@ runs:
             # Re-fetch and recalculate immediately before tag creation to minimize race window
             echo "Re-fetching tags immediately before tag creation..."
             git fetch --tags --force
-            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            LATEST_TAG=$(resolve_baseline_or_die) || exit 1
             NEXT_VERSION=$(calculate_version "$LATEST_TAG")
             TAG_NAME="v$NEXT_VERSION"
             echo "Pre-create version: $NEXT_VERSION, tag: $TAG_NAME"
+
+            # Same no-bump guard as above: a tag fetched just now may already
+            # cover HEAD, in which case there is nothing to create.
+            if [ "$TAG_NAME" = "$LATEST_TAG" ]; then
+              echo "No version bump after pre-create recalculation - $TAG_NAME already covers HEAD"
+              echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+              echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
 
             # Re-check if tag now exists (created by another job in the meantime)
             if git ls-remote --tags origin | grep -q "refs/tags/$TAG_NAME$"; then

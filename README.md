@@ -21,24 +21,24 @@ This repository uses semantic versioning with Git tags:
 - `@v1.0.0` - Specific version (use for maximum reproducibility)
 - `@main` - Bleeding edge (not recommended for production)
 
-### Releasing with `release.sh`
+### Releases are automatic
 
-The [`release.sh`](./release.sh) script automates the full release process. It will:
+Every merge to `main` triggers the [Release workflow](.github/workflows/release.yml), which:
 
-1. Verify you're on `main` with a clean working tree
-2. Detect the latest semantic version tag
-3. Calculate the next version based on bump type
-4. Prompt for confirmation and release notes
-5. Create an annotated git tag (e.g., `v1.2.0`)
-6. Update the floating major tag (e.g., `v1`) so consumers on `@v1` get the update automatically
-7. Push both tags to origin
+1. Calculates the next version from conventional commits since the last release tag matching `vX.Y.Z` (foreign lineages like `calendar-v*` are ignored)
+2. Creates and pushes the new semver tag (e.g., `v3.0.2`)
+3. Updates the floating major tag (e.g., `v3`) so consumers on `@v3` pick up the release
 
-```bash
-./release.sh patch    # Bug fixes (1.0.1 → 1.0.2)
-./release.sh minor    # New features (1.0.2 → 1.1.0)
-./release.sh major    # Breaking changes (1.1.0 → 2.0.0)
-./release.sh v1.2.3   # Specific version
-```
+There is no manual release step — **the version bump is decided entirely by your commit messages**, so conventional-commit hygiene *is* the release process:
+
+| Commit prefix | Bump |
+|---|---|
+| `BREAKING CHANGE` / `type!:` | major |
+| `feat:` | minor |
+| `fix:` / `perf:` | patch |
+| anything else | patch |
+
+Every merge cuts a release. To batch changes into one version, land them in a single squashed merge.
 
 ## Contributing
 
