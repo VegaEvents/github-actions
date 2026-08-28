@@ -70,14 +70,26 @@ runs:
         set +e
         echo "Deploying to preview channel: ${{ inputs.channel-id }}"
 
+        # Capture stdout ONLY. stderr must not be folded in here: npm logs to
+        # stderr, so on a runner with a cold npx cache the payload gained a
+        #   npm warn exec The following package was not found and will be installed: firebase-tools@<version>
+        # line, and the JSON.parse below died on it with "Unexpected token 'p'".
+        # stderr is still surfaced in the log immediately after, for debugging.
+        STDERR_LOG="$(mktemp)"
         RESULT=$(npx firebase-tools@${{ inputs.firebase-tools-version }} hosting:channel:deploy "${{ inputs.channel-id }}" \
           --only ${{ inputs.firebase-target }} \
           --project ${{ inputs.firebase-project }} \
-          --json 2>&1)
+          --json 2>"$STDERR_LOG")
         EXIT_CODE=$?
 
         echo "Firebase output:"
         echo "$RESULT"
+
+        if [ -s "$STDERR_LOG" ]; then
+          echo "Firebase stderr:"
+          cat "$STDERR_LOG"
+        fi
+        rm -f "$STDERR_LOG"
 
         if [ $EXIT_CODE -ne 0 ]; then
           echo "❌ Firebase deploy failed with exit code $EXIT_CODE"
@@ -88,6 +100,18 @@ runs:
           const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf8'));
           console.log(data.result?.['${{ inputs.firebase-target }}']?.url || '');
         ")
+
+        # Fail loudly instead of emitting an empty output. `set +e` at the top of
+        # this step means a parse failure is otherwise silent: the step reports
+        # success, and consumers only discover the missing URL much later —
+        # csp-check runs as `check-csp.ts "" ""` and exits 2 with a usage error
+        # that reads like a CSP violation, and comment-preview-urls renders
+        # "⏳ Pending..." for a channel that is actually live.
+        if [ -z "$URL" ]; then
+          echo "❌ Deploy succeeded but no preview URL could be parsed from the output above."
+          echo "   Downstream jobs depend on this value, so failing here instead."
+          exit 1
+        fi
 
         echo "url=$URL" >> $GITHUB_OUTPUT
         echo "✅ Preview deployed: $URL"
