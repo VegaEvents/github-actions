@@ -51,7 +51,8 @@ permissions:
 - Runs the build command
 - Verifies build output exists and is non-empty
 - Deploys to Firebase Hosting preview channel using caller-provided ADC
-- Returns the preview URL
+- Returns the preview URL, and **fails the step if that URL cannot be determined**, rather than
+  returning an empty string (see Troubleshooting)
 
 ## Breaking changes in v3
 
@@ -80,3 +81,16 @@ Common issues:
 - **Missing credentials**: Ensure `google-github-actions/auth@v2` ran before this step and the job declares `id-token: write`
 - **Wrong target name**: Check Firebase hosting configuration
 - **Permissions**: Service account needs Firebase Hosting Admin role on the target project
+
+### "Deploy succeeded but no preview URL could be parsed"
+
+The channel deployed, but the action could not read a URL out of the Firebase CLI's `--json` payload,
+so it failed the step instead of handing downstream jobs an empty string.
+
+The step logs the raw stdout under `Firebase output:` and stderr under `Firebase stderr:` — read those
+first. The usual cause is something other than JSON reaching stdout, or the `--only <target>` value not
+matching the key Firebase returns under `result`.
+
+This condition used to be silent: the parse failed, the step still reported success, and the empty
+output surfaced much later in whatever consumed it — a CSP or smoke-test job invoked with an empty URL,
+or a PR comment stuck on "Pending" for a channel that was actually live.
