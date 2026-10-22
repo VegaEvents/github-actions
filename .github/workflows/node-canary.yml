@@ -1,0 +1,39 @@
+name: Node canary
+
+# Cold-cache Playwright browser install on the self-hosted Linux runners.
+# libuv 1.52.1 (Node 24.16.0+) hung this extraction at a fixed byte offset on
+# linuxkit kernels, so every Node bump in setup-node-yarn has to pass it first.
+on:
+  pull_request:
+    paths:
+      - setup-node-yarn/**
+      - .github/workflows/node-canary.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  playwright-install:
+    name: Playwright install (slot ${{ matrix.slot }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Several concurrent jobs so they land on different runner hosts.
+        slot: [1, 2, 3, 4, 5, 6]
+    runs-on: [self-hosted, Linux, builder]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ./setup-node-yarn
+
+      - name: Runner details
+        run: echo "runner=$RUNNER_NAME kernel=$(uname -r) node=$(node --version)"
+
+      - name: Cold Playwright browser install
+        # Healthy runs finish in well under a minute; the libuv hang never finishes.
+        timeout-minutes: 5
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pw-browsers
+        run: npx --yes playwright@1.63.0 install chromium firefox
