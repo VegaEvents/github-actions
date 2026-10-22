@@ -14,7 +14,9 @@ permissions:
 
 jobs:
   release:
-    runs-on: [self-hosted, builder]
+    # GitHub-hosted: the self-hosted builder pool doesn't serve public repos, so
+    # release jobs here sat queued and were cancelled after 24h.
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6

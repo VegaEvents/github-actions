@@ -6,11 +6,15 @@ inputs:
   node-version:
     description: |
       Node.js version to use. Resolution order:
-        1. This input if explicitly set (e.g. `with: node-version: '24.15.0'`)
+        1. This input if explicitly set (e.g. `with: node-version: '24.22.1'`)
         2. The NODE_VERSION env var if set by the caller workflow
-        3. Built-in default (currently 24.15.0 — Node 24.16.0+ ships libuv 1.52.1
-           which hangs streaming file writes on linuxkit/some Ubuntu kernels)
+        3. Built-in default (currently 24.22.1, the Oct 2026 security release).
+           24.16.0+ ships libuv 1.52.1, which hung `playwright install` extraction
+           on linuxkit/some Ubuntu kernels.
     required: false
+    # Maintainers: before bumping the default, run a cold-cache `playwright install`
+    # on the self-hosted Linux runners from a private repo (this public repo can't
+    # reach them). 24.22.1 evidence: PR #7.
     default: ""   # Empty sentinel: "no explicit override, fall through to env/default"
 
 runs:
@@ -22,7 +26,7 @@ runs:
       run: |
         VERSION="${{ inputs.node-version }}"
         if [ -z "$VERSION" ]; then
-          VERSION="${NODE_VERSION:-24.15.0}"
+          VERSION="${NODE_VERSION:-24.22.1}"
         fi
         VERSION="${VERSION//$'\r'/}"
         VERSION="${VERSION//$'\n'/}"
